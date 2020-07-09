@@ -14,20 +14,25 @@ float_tolerance = 1e-7
 #################
 # Main function #
 #################
-
+import time
+start = time.time()
 def computeKeypointsAndDescriptors(image, sigma=1.6, num_intervals=3, assumed_blur=0.5, image_border_width=5):
     """Compute SIFT keypoints and descriptors for an input image
     """
     image = image.astype('float32')
     base_image = generateBaseImage(image, sigma, assumed_blur)
-    num_octaves = 5
+    num_octaves = computeNumberOfOctaves(base_image.shape)
     gaussian_kernels = generateGaussianKernels(sigma, num_intervals)
     gaussian_images = generateGaussianImages(base_image, num_octaves, gaussian_kernels)
     dog_images = generateDoGImages(gaussian_images)
     keypoints = findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, image_border_width)
+    print("time :", time.time() - start)
     keypoints = removeDuplicateKeypoints(keypoints)
+    print("time :", time.time() - start)
     keypoints = convertKeypointsToInputImageSize(keypoints)
+    print("time :", time.time() - start)
     descriptors = generateDescriptors(keypoints, gaussian_images)
+    print("time :", time.time() - start)
     return keypoints, descriptors
 
 #########################
@@ -38,6 +43,7 @@ def generateBaseImage(image, sigma, assumed_blur):
     """Generate base image from input image by upsampling by 2 in both directions and blurring
     """
     logger.debug('Generating base image...')
+    #image = resize(image, dsize=(256, 256), interpolation=INTER_LINEAR)
     image = resize(image, (0, 0), fx=2, fy=2, interpolation=INTER_LINEAR)
     sigma_diff = sqrt(max((sigma ** 2) - ((2 * assumed_blur) ** 2), 0.01))
     return GaussianBlur(image, (0, 0), sigmaX=sigma_diff, sigmaY=sigma_diff)  # the image blur is now sigma instead of assumed_blur
@@ -108,7 +114,7 @@ def findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, ima
             # (i, j) is the center of the 3x3 array
             for i in range(image_border_width, first_image.shape[0] - image_border_width):
                 for j in range(image_border_width, first_image.shape[1] - image_border_width):
-                    if isPixelAnExtremum(first_image[i-1:i+2, j-1:j+2], second_image[i-1:i+2, j-1:j+2], third_image[i-1:i+2, j-1:j+2], threshold):
+                    if isEx(first_image[i-1:i+2, j-1:j+2], second_image[i-1:i+2, j-1:j+2], third_image[i-1:i+2, j-1:j+2], threshold):
                         localization_result = localizeExtremumViaQuadraticFit(i, j, image_index + 1, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width)
                         if localization_result is not None:
                             keypoint, localized_image_index = localization_result
@@ -117,25 +123,18 @@ def findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, ima
                                 keypoints.append(keypoint_with_orientation)
     return keypoints
 
-def isPixelAnExtremum(first_subimage, second_subimage, third_subimage, threshold):
-    """Return True if the center element of the 3x3x3 input array is strictly greater than or less than all its neighbors, False otherwise
-    """
-    center_pixel_value = second_subimage[1, 1]
-    if abs(center_pixel_value) > threshold:
-        if center_pixel_value > 0:
-            return all(center_pixel_value >= first_subimage) and \
-                   all(center_pixel_value >= third_subimage) and \
-                   all(center_pixel_value >= second_subimage[0, :]) and \
-                   all(center_pixel_value >= second_subimage[2, :]) and \
-                   center_pixel_value >= second_subimage[1, 0] and \
-                   center_pixel_value >= second_subimage[1, 2]
-        elif center_pixel_value < 0:
-            return all(center_pixel_value <= first_subimage) and \
-                   all(center_pixel_value <= third_subimage) and \
-                   all(center_pixel_value <= second_subimage[0, :]) and \
-                   all(center_pixel_value <= second_subimage[2, :]) and \
-                   center_pixel_value <= second_subimage[1, 0] and \
-                   center_pixel_value <= second_subimage[1, 2]
+def isEx(fir,sec,thr,threshold):
+    center = sec[1,1]
+    if(abs(center)>threshold):
+        for i in range(3):
+            for j in range(3):
+                if center<fir[i][j]:
+                    return False
+                if center<thr[i][j]:
+                    return False
+                if center<sec[i][j]:
+                    return False
+        return True
     return False
 
 def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width, eigenvalue_ratio=10, num_attempts_until_convergence=5):
@@ -150,8 +149,20 @@ def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_interva
         pixel_cube = stack([first_image[i-1:i+2, j-1:j+2],
                             second_image[i-1:i+2, j-1:j+2],
                             third_image[i-1:i+2, j-1:j+2]]).astype('float32') / 255.
-        gradient = computeGradientAtCenterPixel(pixel_cube)
-        hessian = computeHessianAtCenterPixel(pixel_cube)
+        dx = 0.5 * (pixel_cube[1, 1, 2] - pixel_cube[1, 1, 0])
+        dy = 0.5 * (pixel_cube[1, 2, 1] - pixel_cube[1, 0, 1])
+        ds = 0.5 * (pixel_cube[2, 1, 1] - pixel_cube[0, 1, 1])
+        gradient = array([dx, dy, ds])
+        center_pixel_value = pixel_cube[1, 1, 1]
+        dxx = pixel_cube[1, 1, 2] - 2 * center_pixel_value + pixel_cube[1, 1, 0]
+        dyy = pixel_cube[1, 2, 1] - 2 * center_pixel_value + pixel_cube[1, 0, 1]
+        dss = pixel_cube[2, 1, 1] - 2 * center_pixel_value + pixel_cube[0, 1, 1]
+        dxy = 0.25 * (pixel_cube[1, 2, 2] - pixel_cube[1, 2, 0] - pixel_cube[1, 0, 2] + pixel_cube[1, 0, 0])
+        dxs = 0.25 * (pixel_cube[2, 1, 2] - pixel_cube[2, 1, 0] - pixel_cube[0, 1, 2] + pixel_cube[0, 1, 0])
+        dys = 0.25 * (pixel_cube[2, 2, 1] - pixel_cube[2, 0, 1] - pixel_cube[0, 2, 1] + pixel_cube[0, 0, 1])
+        hessian = array([[dxx, dxy, dxs],
+                      [dxy, dyy, dys],
+                      [dxs, dys, dss]])
         extremum_update = -lstsq(hessian, gradient, rcond=None)[0]
         if abs(extremum_update[0]) < 0.5 and abs(extremum_update[1]) < 0.5 and abs(extremum_update[2]) < 0.5:
             break
@@ -182,36 +193,6 @@ def localizeExtremumViaQuadraticFit(i, j, image_index, octave_index, num_interva
             keypoint.response = abs(functionValueAtUpdatedExtremum)
             return keypoint, image_index
     return None
-
-def computeGradientAtCenterPixel(pixel_array):
-    """Approximate gradient at center pixel [1, 1, 1] of 3x3x3 array using central difference formula of order O(h^2), where h is the step size
-    """
-    # With step size h, the central difference formula of order O(h^2) for f'(x) is (f(x + h) - f(x - h)) / (2 * h)
-    # Here h = 1, so the formula simplifies to f'(x) = (f(x + 1) - f(x - 1)) / 2
-    # NOTE: x corresponds to second array axis, y corresponds to first array axis, and s (scale) corresponds to third array axis
-    dx = 0.5 * (pixel_array[1, 1, 2] - pixel_array[1, 1, 0])
-    dy = 0.5 * (pixel_array[1, 2, 1] - pixel_array[1, 0, 1])
-    ds = 0.5 * (pixel_array[2, 1, 1] - pixel_array[0, 1, 1])
-    return array([dx, dy, ds])
-
-def computeHessianAtCenterPixel(pixel_array):
-    """Approximate Hessian at center pixel [1, 1, 1] of 3x3x3 array using central difference formula of order O(h^2), where h is the step size
-    """
-    # With step size h, the central difference formula of order O(h^2) for f''(x) is (f(x + h) - 2 * f(x) + f(x - h)) / (h ^ 2)
-    # Here h = 1, so the formula simplifies to f''(x) = f(x + 1) - 2 * f(x) + f(x - 1)
-    # With step size h, the central difference formula of order O(h^2) for (d^2) f(x, y) / (dx dy) = (f(x + h, y + h) - f(x + h, y - h) - f(x - h, y + h) + f(x - h, y - h)) / (4 * h ^ 2)
-    # Here h = 1, so the formula simplifies to (d^2) f(x, y) / (dx dy) = (f(x + 1, y + 1) - f(x + 1, y - 1) - f(x - 1, y + 1) + f(x - 1, y - 1)) / 4
-    # NOTE: x corresponds to second array axis, y corresponds to first array axis, and s (scale) corresponds to third array axis
-    center_pixel_value = pixel_array[1, 1, 1]
-    dxx = pixel_array[1, 1, 2] - 2 * center_pixel_value + pixel_array[1, 1, 0]
-    dyy = pixel_array[1, 2, 1] - 2 * center_pixel_value + pixel_array[1, 0, 1]
-    dss = pixel_array[2, 1, 1] - 2 * center_pixel_value + pixel_array[0, 1, 1]
-    dxy = 0.25 * (pixel_array[1, 2, 2] - pixel_array[1, 2, 0] - pixel_array[1, 0, 2] + pixel_array[1, 0, 0])
-    dxs = 0.25 * (pixel_array[2, 1, 2] - pixel_array[2, 1, 0] - pixel_array[0, 1, 2] + pixel_array[0, 1, 0])
-    dys = 0.25 * (pixel_array[2, 2, 1] - pixel_array[2, 0, 1] - pixel_array[0, 2, 1] + pixel_array[0, 0, 1])
-    return array([[dxx, dxy, dxs],
-                  [dxy, dyy, dys],
-                  [dxs, dys, dss]])
 
 #########################
 # Keypoint orientations #
