@@ -25,15 +25,18 @@ def computeKeypointsAndDescriptors(image, sigma=1.6, num_intervals=3, assumed_bl
     gaussian_kernels = generateGaussianKernels(sigma, num_intervals)
     gaussian_images = generateGaussianImages(base_image, num_octaves, gaussian_kernels)
     dog_images = generateDoGImages(gaussian_images)
-    keypoints = findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, image_border_width)
+    keypoints, patches = findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, image_border_width)
     print("time :", time.time() - start)
-    keypoints = removeDuplicateKeypoints(keypoints)
+    keypoints, patches = removeDuplicateKeypoints(keypoints, patches)
     print("time :", time.time() - start)
-    keypoints = convertKeypointsToInputImageSize(keypoints)
+    keypoints, patches = convertKeypointsToInputImageSize(keypoints, patches)
     print("time :", time.time() - start)
-    descriptors = generateDescriptors(keypoints, gaussian_images)
+    descriptors, patches = generateDescriptors(keypoints, patches, gaussian_images)
     print("time :", time.time() - start)
-    return keypoints, descriptors
+    print(keypoints[0])
+    print(descriptors[0])
+    print(patches[0]) #keypoints patches descriptor 순서로 출력
+    return keypoints, descriptors, patches
 
 #########################
 # Image pyramid related #
@@ -108,7 +111,7 @@ def findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, ima
     logger.debug('Finding scale-space extrema...')
     threshold = floor(0.5 * contrast_threshold / num_intervals * 255)  # from OpenCV implementation
     keypoints = []
-
+    patches = []
     for octave_index, dog_images_in_octave in enumerate(dog_images):
         for image_index, (first_image, second_image, third_image) in enumerate(zip(dog_images_in_octave, dog_images_in_octave[1:], dog_images_in_octave[2:])):
             # (i, j) is the center of the 3x3 array
@@ -117,11 +120,15 @@ def findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, ima
                     if isEx(first_image[i-1:i+2, j-1:j+2], second_image[i-1:i+2, j-1:j+2], third_image[i-1:i+2, j-1:j+2], threshold):
                         localization_result = localizeExtremumViaQuadraticFit(i, j, image_index + 1, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width)
                         if localization_result is not None:
+                            patch = second_image[i-1:i+2, j-1:j+2]
                             keypoint, localized_image_index = localization_result
                             keypoints_with_orientations = computeKeypointsWithOrientations(keypoint, octave_index, gaussian_images[octave_index][localized_image_index])
                             for keypoint_with_orientation in keypoints_with_orientations:
                                 keypoints.append(keypoint_with_orientation)
-    return keypoints
+                                t = (keypoint_with_orientation, patch)
+                                patches.append(t)
+
+    return keypoints, patches
 
 def isEx(fir,sec,thr,threshold):
     center = sec[1,1]
@@ -265,7 +272,7 @@ def compareKeypoints(keypoint1, keypoint2):
         return keypoint2.octave - keypoint1.octave
     return keypoint2.class_id - keypoint1.class_id
 
-def removeDuplicateKeypoints(keypoints):
+def removeDuplicateKeypoints(keypoints, patches):
     """Sort keypoints and remove duplicate keypoints
     """
     if len(keypoints) < 2:
@@ -273,7 +280,8 @@ def removeDuplicateKeypoints(keypoints):
 
     keypoints.sort(key=cmp_to_key(compareKeypoints))
     unique_keypoints = [keypoints[0]]
-
+    unique_patches = [patches[0]]
+    cnt = 0
     for next_keypoint in keypoints[1:]:
         last_unique_keypoint = unique_keypoints[-1]
         if last_unique_keypoint.pt[0] != next_keypoint.pt[0] or \
@@ -281,22 +289,28 @@ def removeDuplicateKeypoints(keypoints):
            last_unique_keypoint.size != next_keypoint.size or \
            last_unique_keypoint.angle != next_keypoint.angle:
             unique_keypoints.append(next_keypoint)
-    return unique_keypoints
+            unique_patches.append((next_keypoint, patches[1:cnt]))
+            cnt = cnt + 1
+    return unique_keypoints, unique_patches
 
 #############################
 # Keypoint scale conversion #
 #############################
 
-def convertKeypointsToInputImageSize(keypoints):
+def convertKeypointsToInputImageSize(keypoints, patches):
     """Convert keypoint point, size, and octave to input image size
     """
     converted_keypoints = []
+    converted_patches = []
+    cnt = 0
     for keypoint in keypoints:
         keypoint.pt = tuple(0.5 * array(keypoint.pt))
         keypoint.size *= 0.5
         keypoint.octave = (keypoint.octave & ~255) | ((keypoint.octave - 1) & 255)
+        converted_patches.append((keypoint, patches[cnt][1]))
         converted_keypoints.append(keypoint)
-    return converted_keypoints
+        cnt = cnt + 1
+    return converted_keypoints, converted_patches
 
 #########################
 # Descriptor generation #
@@ -312,13 +326,15 @@ def unpackOctave(keypoint):
     scale = 1 / float32(1 << octave) if octave >= 0 else float32(1 << -octave)
     return octave, layer, scale
 
-def generateDescriptors(keypoints, gaussian_images, window_width=4, num_bins=8, scale_multiplier=3, descriptor_max_value=0.2):
+def generateDescriptors(keypoints, patches, gaussian_images, window_width=4, num_bins=8, scale_multiplier=3, descriptor_max_value=0.2):
     """Generate descriptors for each keypoint
     """
     logger.debug('Generating descriptors...')
     descriptors = []
-
+    patchess = []
+    cnt = -1
     for keypoint in keypoints:
+        cnt = cnt+1
         octave, layer, scale = unpackOctave(keypoint)
         gaussian_image = gaussian_images[octave + 1, layer]
         num_rows, num_cols = gaussian_image.shape
@@ -404,4 +420,5 @@ def generateDescriptors(keypoints, gaussian_images, window_width=4, num_bins=8, 
         descriptor_vector[descriptor_vector < 0] = 0
         descriptor_vector[descriptor_vector > 255] = 255
         descriptors.append(descriptor_vector)
-    return array(descriptors, dtype='float32')
+        patchess.append((patches[cnt],descriptor_vector))
+    return array(descriptors, dtype='float32'), patchess

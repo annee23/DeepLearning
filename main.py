@@ -13,7 +13,7 @@ def main():
     img2 = cv2.imread('box_in_scene.png', 0)  # trainImage
 
     # Compute SIFT keypoints and descriptors
-    kp1, des1 = sift.computeKeypointsAndDescriptors(img1)
+    kp1, des1, pat1 = sift.computeKeypointsAndDescriptors(img1)
     #for only one image keypoints
     img=cv2.drawKeypoints(img1,kp1,None,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('img', img)
