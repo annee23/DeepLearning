@@ -3,6 +3,7 @@ import cv2
 import sift
 from matplotlib import pyplot as plt
 import logging
+import descripter
 def main():
     logger = logging.getLogger(__name__)
 
@@ -13,12 +14,14 @@ def main():
 
     # Compute SIFT keypoints and descriptors
     kp1, des1 = sift.computeKeypointsAndDescriptors(img1)
+    #for only one image keypoints
+    img=cv2.drawKeypoints(img1,kp1,None,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+    cv2.imshow('img', img)
+    cv2.waitKey()
+    cv2.destroyAllWindows()
 
-    #img=cv2.drawKeypoints(img1,kp1,None,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-    #cv2.imshow('img', img)
-    #cv2.waitKey()
-    #cv2.destroyAllWindows()
     kp2, des2 = sift.computeKeypointsAndDescriptors(img2)
+
 
     # Initialize and use FLANN
     FLANN_INDEX_KDTREE = 0
