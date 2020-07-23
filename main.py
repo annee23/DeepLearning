@@ -14,6 +14,7 @@ def main():
 
     # Compute SIFT keypoints and descriptors
     kp1, des1, pat1 = sift.computeKeypointsAndDescriptors(img1)
+    print(des1[0:3])
     #for only one image keypoints
     img=cv2.drawKeypoints(img1,kp1,None,flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
     cv2.imshow('img', img)

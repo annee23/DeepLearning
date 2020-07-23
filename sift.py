@@ -3,7 +3,7 @@ from numpy.linalg import det, lstsq, norm
 from cv2 import resize, GaussianBlur, subtract, KeyPoint, INTER_LINEAR, INTER_NEAREST
 from functools import cmp_to_key
 import logging
-
+import numpy as np
 ####################
 # Global variables #
 ####################
@@ -33,9 +33,7 @@ def computeKeypointsAndDescriptors(image, sigma=1.6, num_intervals=3, assumed_bl
     print("time :", time.time() - start)
     descriptors, patches = generateDescriptors(keypoints, patches, gaussian_images)
     print("time :", time.time() - start)
-    print(keypoints[0])
-    print(descriptors[0])
-    print(patches[0]) #keypoints patches descriptor 순서로 출력
+
     return keypoints, descriptors, patches
 
 #########################
@@ -116,17 +114,18 @@ def findScaleSpaceExtrema(gaussian_images, dog_images, num_intervals, sigma, ima
         for image_index, (first_image, second_image, third_image) in enumerate(zip(dog_images_in_octave, dog_images_in_octave[1:], dog_images_in_octave[2:])):
             # (i, j) is the center of the 3x3 array
             for i in range(image_border_width, first_image.shape[0] - image_border_width):
+                #print(len(first_image))
                 for j in range(image_border_width, first_image.shape[1] - image_border_width):
                     if isEx(first_image[i-1:i+2, j-1:j+2], second_image[i-1:i+2, j-1:j+2], third_image[i-1:i+2, j-1:j+2], threshold):
                         localization_result = localizeExtremumViaQuadraticFit(i, j, image_index + 1, octave_index, num_intervals, dog_images_in_octave, sigma, contrast_threshold, image_border_width)
                         if localization_result is not None:
-                            patch = second_image[i-1:i+2, j-1:j+2]
+                            k = int(sqrt(len(second_image))/2)
+                            patch = second_image[i-k:i+k, j-k:j+k]
                             keypoint, localized_image_index = localization_result
                             keypoints_with_orientations = computeKeypointsWithOrientations(keypoint, octave_index, gaussian_images[octave_index][localized_image_index])
                             for keypoint_with_orientation in keypoints_with_orientations:
                                 keypoints.append(keypoint_with_orientation)
-                                t = (keypoint_with_orientation, patch)
-                                patches.append(t)
+                                patches.append(patch)
 
     return keypoints, patches
 
@@ -289,7 +288,7 @@ def removeDuplicateKeypoints(keypoints, patches):
            last_unique_keypoint.size != next_keypoint.size or \
            last_unique_keypoint.angle != next_keypoint.angle:
             unique_keypoints.append(next_keypoint)
-            unique_patches.append((next_keypoint, patches[1:cnt]))
+            unique_patches.append(patches[cnt])
             cnt = cnt + 1
     return unique_keypoints, unique_patches
 
@@ -307,7 +306,7 @@ def convertKeypointsToInputImageSize(keypoints, patches):
         keypoint.pt = tuple(0.5 * array(keypoint.pt))
         keypoint.size *= 0.5
         keypoint.octave = (keypoint.octave & ~255) | ((keypoint.octave - 1) & 255)
-        converted_patches.append((keypoint, patches[cnt][1]))
+        converted_patches.append(patches[cnt])
         converted_keypoints.append(keypoint)
         cnt = cnt + 1
     return converted_keypoints, converted_patches
@@ -333,6 +332,7 @@ def generateDescriptors(keypoints, patches, gaussian_images, window_width=4, num
     descriptors = []
     patchess = []
     cnt = -1
+    grad = [[] for i in range(len(keypoints))]
     for keypoint in keypoints:
         cnt = cnt+1
         octave, layer, scale = unpackOctave(keypoint)
@@ -373,6 +373,10 @@ def generateDescriptors(keypoints, patches, gaussian_images, window_width=4, num
                         row_bin_list.append(row_bin)
                         col_bin_list.append(col_bin)
                         magnitude_list.append(weight * gradient_magnitude)
+                        #t = patches[cnt][1][int(25-int(gradient_magnitude)):int(25 + int(gradient_magnitude)), int(25-int(gradient_magnitude)):int(25 + int(gradient_magnitude))])
+                        #grad[cnt].append(t)
+                        #patches[cnt].append(patches[cnt][1][int(-gradient_magnitude):int(1 + gradient_magnitude),
+                                           # int(-gradient_magnitude):int(1 + gradient_magnitude)])
                         orientation_bin_list.append((gradient_orientation - angle) * bins_per_degree)
 
         for row_bin, col_bin, magnitude, orientation_bin in zip(row_bin_list, col_bin_list, magnitude_list, orientation_bin_list):
@@ -420,5 +424,7 @@ def generateDescriptors(keypoints, patches, gaussian_images, window_width=4, num
         descriptor_vector[descriptor_vector < 0] = 0
         descriptor_vector[descriptor_vector > 255] = 255
         descriptors.append(descriptor_vector)
-        patchess.append((patches[cnt],descriptor_vector))
+
+        patchess.append(patches[cnt])
+
     return array(descriptors, dtype='float32'), patchess
