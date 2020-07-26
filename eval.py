@@ -25,10 +25,11 @@ for k in range(len(patches)):
     # arr = patches[k].reshape(50,50)
     # im = Image.fromarray(arr.astype('uint8'),'L')
     print(type(patches[k]))
-    im = Image.fromarray(patches[k],'L')
-    im.save('myim.png')
-    im = cv2.imread('myim.png')
-    kp, des = sift_cv2.detectAndCompute(im, None)
+    if len(patches[k])>3:
+        im = Image.fromarray(patches[k],'L')
+        im.save('myim.png')
+        im = cv2.imread('myim.png')
+        kp, des = sift_cv2.detectAndCompute(im, None)
     for fl in files:
         img = cv2.imread(fl, 0)
         img = cv2.resize(img, dsize=(256,256), interpolation=cv2.INTER_AREA)
