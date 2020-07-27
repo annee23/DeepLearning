@@ -22,9 +22,11 @@ print(comp)
 kp, des, patches = sift.computeKeypointsAndDescriptors(comp)
 cnt_file = []
 cnt = []
+
 for i in range(len(kp)):
     cnt_file.append(0)
     cnt.append(0)
+patches_img = []
 sift_cv2 = cv2.xfeatures2d.SIFT_create()
 labels = []
 for k in range(len(patches)):
@@ -36,6 +38,7 @@ for k in range(len(patches)):
         im = Image.fromarray(patches[k], 'L')
         im.save('myim.png')
         im = cv2.imread('myim.png')
+        patches_img.append(im)
         kp, des = sift_cv2.detectAndCompute(im, None)
     for fl in files:
         img = cv2.imread(fl, 0)
@@ -68,13 +71,22 @@ for k in range(len(patches)):
     print("time :", time.time() - start)
 
 
+# plt.hist(cnt_file)
+# plt.show()
+
+labels = []
+for i in range(len(patches)):
+    labels.append(1)
+for k in range(len(patches_img)):
+    patches[k] = cv2.resize(patches_img[k], dsize=(16, 16), interpolation=cv2.INTER_AREA)
 class patDataset(Dataset):
     def __init__(self, patches, labels):
-        self.labels = labels
         self.patches = patches
+        self.labels = labels
+        self.data_len = len(patches)
 
-    def __len__(self, patches):
-        return len(self.patches)
+    def __len__(self):
+        return self.data_len
 
     def __getitem__(self, idx):
         X = self.patches[idx]
@@ -85,10 +97,11 @@ class patDataset(Dataset):
 from torchvision import transforms, utils
 from torch.utils.data.dataset import random_split
 import torchvision
+patDataset.__init__(self=patDataset, patches=patches, labels=labels)
 trans = transforms.Compose([transforms.Resize(32, 32), transforms.ToTensor(), transforms.Normalize((0.485, 0.456, 0.456),(0.229,0.224, 0.225))])
-train_ = patDataset.__len__(patches)*0.8
-test_ = patDataset.__len__(patches)*0.2
-train_dataset, val_dataset = random_split(patDataset(Dataset), [train_, test_])
+train_ = int(patDataset.__len__(self=patDataset)*0.8)
+test_ = patDataset.__len__(self=patDataset)-train_
+train_dataset, val_dataset = random_split(patDataset( patches=patches, labels=labels), [train_, test_])
 train_loader = DataLoader(dataset=train_dataset, batch_size=16)
 val_loader = DataLoader(dataset=val_dataset, batch_size=20)
 
