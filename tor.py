@@ -17,7 +17,7 @@ data_path = ima_dir + "/*.JPG"
 files = glob.glob(data_path)
 data = []
 comp = cv2.imread("DSC01873.JPG", 0)
-comp = cv2.resize(comp, dsize=(256, 256), interpolation=cv2.INTER_AREA)
+comp = cv2.resize(comp, dsize=(128, 128), interpolation=cv2.INTER_AREA)
 print(comp)
 kp, des, patches = sift.computeKeypointsAndDescriptors(comp)
 cnt_file = []
@@ -38,8 +38,10 @@ for k in range(len(patches)):
         im = Image.fromarray(patches[k], 'L')
         im.save('myim.png')
         im = cv2.imread('myim.png')
-        patches_img.append(im)
         kp, des = sift_cv2.detectAndCompute(im, None)
+        #im = im.astype('float32')
+        patches_img.append(im.astype('float32'))
+
     for fl in files:
         img = cv2.imread(fl, 0)
         img = cv2.resize(img, dsize=(256,256), interpolation=cv2.INTER_AREA)
@@ -74,15 +76,15 @@ for k in range(len(patches)):
 # plt.hist(cnt_file)
 # plt.show()
 
-labels = []
-for i in range(len(patches)):
-    labels.append(1)
+# labels = []
+train_img = []
+# for i in range(len(patches)):
+#     labels.append(1)
 for k in range(len(patches_img)):
-    patches[k] = cv2.resize(patches_img[k], dsize=(16, 16), interpolation=cv2.INTER_AREA)
+    train_img.append(patches_img[k])
 class patDataset(Dataset):
-    def __init__(self, patches, labels):
+    def __init__(self, patches):
         self.patches = patches
-        self.labels = labels
         self.data_len = len(patches)
 
     def __len__(self):
@@ -90,136 +92,207 @@ class patDataset(Dataset):
 
     def __getitem__(self, idx):
         X = self.patches[idx]
-        y = self.labels[idx]
 
-        return X, y
+
+        return X
+class labDataset(Dataset):
+    def __init__(self, labels):
+        self.labels = labels
+        self.data_len = len(labels)
+
+    def __len__(self):
+        return self.data_len
+
+    def __getitem__(self, idx):
+        X = self.labels[idx]
+
+
+        return X
 
 from torchvision import transforms, utils
 from torch.utils.data.dataset import random_split
 import torchvision
-patDataset.__init__(self=patDataset, patches=patches, labels=labels)
+
+patDataset.__init__(self=patDataset, patches=patches)
 trans = transforms.Compose([transforms.Resize(32, 32), transforms.ToTensor(), transforms.Normalize((0.485, 0.456, 0.456),(0.229,0.224, 0.225))])
 train_ = int(patDataset.__len__(self=patDataset)*0.8)
 test_ = patDataset.__len__(self=patDataset)-train_
-train_dataset, val_dataset = random_split(patDataset( patches=patches, labels=labels), [train_, test_])
-train_loader = DataLoader(dataset=train_dataset, batch_size=16)
-val_loader = DataLoader(dataset=val_dataset, batch_size=20)
+# train_x, val_x = random_split(patDataset( patches=patches), [train_, test_])
+# train_y, val_y = random_split(labDataset( labels=labels), [train_, test_])
+
+# train_loader = DataLoader(dataset=train_dataset, batch_size=16)
+#
+# val_loader = DataLoader(dataset=val_dataset, batch_size=20)
 
 use_cuda = torch.cuda.is_available()
-import itertools
-from IPython.display import Image
-from IPython import display
+
+
+# importing the libraries
+import pandas as pd
+import numpy as np
+
+# for reading and displaying images
+from skimage.io import imread
 import matplotlib.pyplot as plt
 
+
+# for creating validation set
+from sklearn.model_selection import train_test_split
+
+# for evaluating the model
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+
+# PyTorch libraries and modules
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-from torchvision import datasets, transforms
+from torch.autograd import Variable
+from torch.nn import Linear, ReLU, CrossEntropyLoss, Sequential, Conv2d, MaxPool2d, Module, Softmax, BatchNorm2d, Dropout
+from torch.optim import Adam, SGD
 
-class CNNClassifier(nn.Module):
+# converting the list to numpy array
+train_x = train_img
+print(len(train_img))
+# defining the target
+train_y = np.array(labels)
 
+# create validation set
+train_x, val_x, train_y, val_y = train_test_split(train_x, train_y, test_size = 0.2)
+print((train_x.shape, train_y.shape), (val_x.shape, val_y.shape))
+
+# converting training images into torch format
+train_x = train_x.reshape(218, 1, 28, 28)
+train_x  = torch.from_numpy(train_x)
+
+
+# converting the target into torch format
+train_y = train_y.astype(int);
+train_y = torch.from_numpy(train_y)
+
+# shape of training data
+train_x.shape, train_y.shape
+
+#converting validation images into torch format
+val_x = val_x.reshape(25, 1, 28, 28)
+val_x  = torch.from_numpy(val_x)
+
+# converting the target into torch format
+val_y = val_y.astype(int);
+val_y = torch.from_numpy(val_y)
+
+# shape of validation data
+val_x.shape, val_y.shape
+class Net(Module):
     def __init__(self):
-        # 항상 torch.nn.Module을 상속받고 시작
-        super(CNNClassifier, self).__init__()
-        conv1 = nn.Conv2d(1, 6, 5, 1)  # 6@24*24
-        # activation ReLU
-        pool1 = nn.MaxPool2d(2)  # 6@12*12
-        conv2 = nn.Conv2d(6, 16, 5, 1)  # 16@8*8
-        # activation ReLU
-        pool2 = nn.MaxPool2d(2)  # 16@4*4
+        super(Net, self).__init__()
 
-        self.conv_module = nn.Sequential(
-            conv1,
-            nn.ReLU(),
-            pool1,
-            conv2,
-            nn.ReLU(),
-            pool2
+        self.cnn_layers = Sequential(
+            # Defining a 2D convolution layer
+            Conv2d(1, 4, kernel_size=3, stride=1, padding=1),
+            BatchNorm2d(4),
+            ReLU(inplace=True),
+            MaxPool2d(kernel_size=2, stride=2),
+            # Defining another 2D convolution layer
+            Conv2d(4, 4, kernel_size=3, stride=1, padding=1),
+            BatchNorm2d(4),
+            ReLU(inplace=True),
+            MaxPool2d(kernel_size=2, stride=2),
         )
 
-        fc1 = nn.Linear(16 * 4 * 4, 120)
-        # activation ReLU
-        fc2 = nn.Linear(120, 84)
-        # activation ReLU
-        fc3 = nn.Linear(84, 10)
-
-        self.fc_module = nn.Sequential(
-            fc1,
-            nn.ReLU(),
-            fc2,
-            nn.ReLU(),
-            fc3
+        self.linear_layers = Sequential(
+            Linear(4 * 7 * 7, 10)
         )
 
-        # gpu로 할당
-        if use_cuda:
-            self.conv_module = self.conv_module.cuda()
-            self.fc_module = self.fc_module.cuda()
-
+    # Defining the forward pass
     def forward(self, x):
-        out = self.conv_module(x)  # @16*4*4
-        # make linear
-        dim = 1
-        for d in out.size()[1:]:  # 16, 4, 4
-            dim = dim * d
-        out = out.view(-1, dim)
-        out = self.fc_module(out)
-        return F.softmax(out, dim=1)
+        x = self.cnn_layers(x)
+        x = x.view(x.size(0), -1)
+        x = self.linear_layers(x)
+        return x
 
-cnn = CNNClassifier()
-# loss
-criterion = nn.CrossEntropyLoss()
-# backpropagation method
-learning_rate = 1e-3
-optimizer = optim.Adam(cnn.parameters(), lr=learning_rate)
-# hyper-parameters
-num_epochs = 2
-num_batches = len(train_loader)
 
-trn_loss_list = []
-val_loss_list = []
-for epoch in range(num_epochs):
-    trn_loss = 0.0
-    for i, data in enumerate(train_loader):
-        x, label = data
-        if use_cuda:
-            x = x.cuda()
-            label = label.cuda()
-        # grad init
-        optimizer.zero_grad()
-        # forward propagation
-        model_output = cnn(x)
-        # calculate loss
-        loss = criterion(model_output, label)
-        # back propagation
-        loss.backward()
-        # weight update
-        optimizer.step()
+# defining the model
+model = Net()
+# defining the optimizer
+optimizer = Adam(model.parameters(), lr=0.07)
+# defining the loss function
+criterion = CrossEntropyLoss()
+# checking if GPU is available
+if torch.cuda.is_available():
+    model = model.cuda()
+    criterion = criterion.cuda()
 
-        # trn_loss summary
-        trn_loss += loss.item()
-        # del (memory issue)
-        del loss
-        del model_output
+print(model)
 
-        # 학습과정 출력
-        if (i + 1) % 100 == 0:  # every 100 mini-batches
-            with torch.no_grad():  # very very very very important!!!
-                val_loss = 0.0
-                for j, val in enumerate(val_loader):
-                    val_x, val_label = val
-                    if use_cuda:
-                        val_x = val_x.cuda()
-                        val_label = val_label.cuda()
-                    val_output = cnn(val_x)
-                    v_loss = criterion(val_output, val_label)
-                    val_loss += v_loss
 
-            print("epoch: {}/{} | step: {}/{} | trn loss: {:.4f} | val loss: {:.4f}".format(
-                epoch + 1, num_epochs, i + 1, num_batches, trn_loss / 100, val_loss / len(val_loader)
-            ))
+def train(epoch):
+    model.train()
+    tr_loss = 0
+    # getting the training set
+    x_train, y_train = Variable(train_x), Variable(train_y)
+    # getting the validation set
+    x_val, y_val = Variable(val_x), Variable(val_y)
+    # converting the data into GPU format
+    if torch.cuda.is_available():
+        x_train = x_train.cuda()
+        y_train = y_train.cuda()
+        x_val = x_val.cuda()
+        y_val = y_val.cuda()
 
-            trn_loss_list.append(trn_loss / 100)
-            val_loss_list.append(val_loss / len(val_loader))
-            trn_loss = 0.0
+    # clearing the Gradients of the model parameters
+    optimizer.zero_grad()
+
+    # prediction for training and validation set
+    output_train = model(x_train)
+    output_val = model(x_val)
+
+    # computing the training and validation loss
+    loss_train = criterion(output_train, y_train)
+    loss_val = criterion(output_val, y_val)
+    train_losses.append(loss_train)
+    val_losses.append(loss_val)
+
+    # computing the updated weights of all the model parameters
+    loss_train.backward()
+    optimizer.step()
+    tr_loss = loss_train.item()
+    if epoch % 2 == 0:
+        # printing the validation loss
+        print('Epoch : ', epoch + 1, '\t', 'loss :', loss_val)
+
+# defining the number of epochs
+n_epochs = 25
+# empty list to store training losses
+train_losses = []
+# empty list to store validation losses
+val_losses = []
+# training the model
+for epoch in range(n_epochs):
+    train(epoch)
+# plotting the training and validation loss
+plt.plot(train_losses, label='Training loss')
+plt.plot(val_losses, label='Validation loss')
+plt.legend()
+plt.show()
+
+# prediction for training set
+with torch.no_grad():
+    output = model(train_x.cuda())
+
+softmax = torch.exp(output).cpu()
+prob = list(softmax.numpy())
+predictions = np.argmax(prob, axis=1)
+
+# accuracy on training set
+accuracy_score(train_y, predictions)
+
+# prediction for validation set
+with torch.no_grad():
+    output = model(val_x.cuda())
+
+softmax = torch.exp(output).cpu()
+prob = list(softmax.numpy())
+predictions = np.argmax(prob, axis=1)
+
+# accuracy on validation set
+accuracy_score(val_y, predictions)
+
