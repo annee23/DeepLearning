@@ -1,132 +1,3 @@
-from scipy._lib.decorator import __init__
-from torch.distributions import transforms
-import torch
-from torch.autograd import Variable
-from torch.utils.data import Dataset, DataLoader
-import os
-import numpy as np
-import cv2
-from matplotlib import pyplot as plt
-import glob
-from PIL import Image
-import sift
-import time
-start = time.time()
-ima_dir = "./IMG"
-data_path = ima_dir + "/*.JPG"
-files = glob.glob(data_path)
-data = []
-comp = cv2.imread("DSC01873.JPG", 0)
-comp = cv2.resize(comp, dsize=(128, 128), interpolation=cv2.INTER_AREA)
-print(comp)
-kp, des, patches = sift.computeKeypointsAndDescriptors(comp)
-cnt_file = []
-cnt = []
-
-for i in range(len(kp)):
-    cnt_file.append(0)
-    cnt.append(0)
-patches_img = []
-sift_cv2 = cv2.xfeatures2d.SIFT_create()
-labels = []
-for k in range(len(patches)):
-    patches[k] = np.array(patches[k])
-    # arr = patches[k].reshape(50,50)
-    # im = Image.fromarray(arr.astype('uint8'),'L')
-    print(type(patches[k]))
-    if patches[k].shape[0]!= 0 and patches[k].shape[1]!=0:
-        im = Image.fromarray(patches[k], 'L')
-        im.save('myim.png')
-        im = cv2.imread('myim.png')
-        kp, des = sift_cv2.detectAndCompute(im, None)
-        #im = im.astype('float32')
-        patches_img.append(im.astype('float32'))
-
-    for fl in files:
-        img = cv2.imread(fl, 0)
-        img = cv2.resize(img, dsize=(256,256), interpolation=cv2.INTER_AREA)
-        kp1, des1 = sift_cv2.detectAndCompute(img,None)
-        # FLANN parameters
-        FLANN_INDEX_KDTREE = 0
-        index_params = dict(algorithm=FLANN_INDEX_KDTREE, trees=5)
-        search_params = dict(checks=50)  # or pass empty dictionary
-        flann = cv2.FlannBasedMatcher(index_params, search_params)
-        matches = flann.knnMatch(des, des1, k=2)
-
-        # Need to draw only good matches, so create a mask
-        matchesMask = [[0, 0] for i in range(len(matches))]
-        # ratio test as per Lowe's paper
-        for i, (m, n) in enumerate(matches):
-            if m.distance < 0.3 * n.distance:
-                matchesMask[i] = [1, 0]
-        draw_params = dict(matchColor=(0, 255, 0),
-                           singlePointColor=(255, 0, 0),
-                           matchesMask=matchesMask,
-                           flags=0)
-        img3 = cv2.drawMatchesKnn(im, kp, img, kp1, matches, None, **draw_params)
-        plt.imshow(img3, ), plt.show()
-        cnt[k] = len(matches)
-    if cnt[k] > 0:
-        cnt_file[k] = cnt[k]
-    labels.append(cnt_file[k])
-    print(cnt_file[k])
-    print("time :", time.time() - start)
-
-
-# plt.hist(cnt_file)
-# plt.show()
-
-# labels = []
-train_img = []
-# for i in range(len(patches)):
-#     labels.append(1)
-for k in range(len(patches_img)):
-    train_img.append(patches_img[k])
-class patDataset(Dataset):
-    def __init__(self, patches):
-        self.patches = patches
-        self.data_len = len(patches)
-
-    def __len__(self):
-        return self.data_len
-
-    def __getitem__(self, idx):
-        X = self.patches[idx]
-
-
-        return X
-class labDataset(Dataset):
-    def __init__(self, labels):
-        self.labels = labels
-        self.data_len = len(labels)
-
-    def __len__(self):
-        return self.data_len
-
-    def __getitem__(self, idx):
-        X = self.labels[idx]
-
-
-        return X
-
-from torchvision import transforms, utils
-from torch.utils.data.dataset import random_split
-import torchvision
-
-patDataset.__init__(self=patDataset, patches=patches)
-trans = transforms.Compose([transforms.Resize(32, 32), transforms.ToTensor(), transforms.Normalize((0.485, 0.456, 0.456),(0.229,0.224, 0.225))])
-train_ = int(patDataset.__len__(self=patDataset)*0.8)
-test_ = patDataset.__len__(self=patDataset)-train_
-# train_x, val_x = random_split(patDataset( patches=patches), [train_, test_])
-# train_y, val_y = random_split(labDataset( labels=labels), [train_, test_])
-
-# train_loader = DataLoader(dataset=train_dataset, batch_size=16)
-#
-# val_loader = DataLoader(dataset=val_dataset, batch_size=20)
-
-use_cuda = torch.cuda.is_available()
-
-
 # importing the libraries
 import pandas as pd
 import numpy as np
@@ -149,9 +20,35 @@ from torch.autograd import Variable
 from torch.nn import Linear, ReLU, CrossEntropyLoss, Sequential, Conv2d, MaxPool2d, Module, Softmax, BatchNorm2d, Dropout
 from torch.optim import Adam, SGD
 
+from datafunction import dataPatch
+dataPatch()
+
+# loading training images
+train_img = []
+for img_name in tqdm(train['id']):
+    # defining the image path
+    image_path = 'train_LbELtWX/train/' + str(img_name) + '.png'
+    # reading the image
+    img = imread(image_path, as_gray=True)
+    # normalizing the pixel values
+    img /= 255.0
+    # converting the type of pixel to float 32
+    img = img.astype('float32')
+    # appending the image into the list
+    train_img.append(img)
+
 # converting the list to numpy array
-train_x = train_img
-print(len(train_img))
+train_x = np.array(train_img)
+# defining the target
+train_y = train['label'].values
+train_x.shape
+
+# converting the list to numpy array
+train_x = np.array(patches_img)
+train_x = np.delete(train_x,1,3)
+train_x = np.delete(train_x,1,3)
+train_x = np.delete(train_x,1,3)
+train_x = train_x.reshape(239, 16, 16)
 # defining the target
 train_y = np.array(labels)
 
@@ -160,7 +57,7 @@ train_x, val_x, train_y, val_y = train_test_split(train_x, train_y, test_size = 
 print((train_x.shape, train_y.shape), (val_x.shape, val_y.shape))
 
 # converting training images into torch format
-train_x = train_x.reshape(218, 1, 28, 28)
+train_x = train_x.reshape(191, 1, 28, 28)
 train_x  = torch.from_numpy(train_x)
 
 
@@ -172,7 +69,7 @@ train_y = torch.from_numpy(train_y)
 train_x.shape, train_y.shape
 
 #converting validation images into torch format
-val_x = val_x.reshape(25, 1, 28, 28)
+val_x = val_x.reshape(48, 1, 28, 28)
 val_x  = torch.from_numpy(val_x)
 
 # converting the target into torch format
@@ -199,7 +96,7 @@ class Net(Module):
         )
 
         self.linear_layers = Sequential(
-            Linear(4 * 7 * 7, 10)
+            Linear(4 * 7 * 7, 6)
         )
 
     # Defining the forward pass
