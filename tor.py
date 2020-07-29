@@ -33,23 +33,33 @@ print(train.head())
 
 # loading training images
 train_img = []
+train_la = []
+i = -1
 for img_name in tqdm(train['Patch_num']):
+    i += 1
     # reading the image
     img = cv2.imread(str(img_name))
-    # appending the image into the list
-    train_img.append(img)
+    if np.array(img).shape != () and np.array(img).shape[0] >0 and np.array(img).shape[1]>0:
+        img = cv2.resize(img, dsize=(28, 28), interpolation=cv2.INTER_AREA)
+        train_img.append(img)
+        train_la.append(train['Label'][i])
+
 
 # converting the list to numpy array
 train_x = np.array(train_img)
 # defining the target
-train_y = train['Label'].values
+#train_y = train['Label'].values
+train_y = np.array(train_la)
 print(train_x.shape)
 # create validation set
 train_x, val_x, train_y, val_y = train_test_split(train_x, train_y, test_size = 0.2)
 print((train_x.shape, train_y.shape), (val_x.shape, val_y.shape))
 
 # converting training images into torch format
-train_x = train_x.reshape(239, 1, 28, 28)
+train_x = np.delete(train_x, 1, 3)
+train_x = np.delete(train_x, 1, 3)
+
+train_x = train_x.reshape(191, 1, 28, 28)
 train_x  = torch.from_numpy(train_x)
 
 
@@ -61,7 +71,10 @@ train_y = torch.from_numpy(train_y)
 train_x.shape, train_y.shape
 
 #converting validation images into torch format
-val_x = val_x.reshape(60, 1, 28, 28)
+val_x = np.delete(val_x, 1, 3)
+val_x = np.delete(val_x, 1, 3)
+val_x = val_x.reshape(48, 1, 28, 28)
+
 val_x  = torch.from_numpy(val_x)
 
 # converting the target into torch format
