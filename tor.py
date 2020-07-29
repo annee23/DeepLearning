@@ -41,6 +41,7 @@ for img_name in tqdm(train['Patch_num']):
     img = cv2.imread(str(img_name))
     if np.array(img).shape != () and np.array(img).shape[0] >0 and np.array(img).shape[1]>0:
         img = cv2.resize(img, dsize=(28, 28), interpolation=cv2.INTER_AREA)
+        img = img.astype('float32')
         train_img.append(img)
         train_la.append(train['Label'][i])
 
