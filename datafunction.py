@@ -9,12 +9,23 @@ import sift
 import time
 start = time.time()
 def dataPatch():
-    for i in range(6):
-        try:
-            os.makedirs(str(i))
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
+    data_set = []
+    # class DATA:
+    #     patch = []
+    #     label = 0
+    #     def __init__(self, p, ll):
+    #         patch = p
+    #         label = ll
+    for i in range(300):
+        data_set.append([])
+    data_set[0].append('Patch_num')
+    data_set[0].append('Label')
+    # for i in range(6):
+    #     try:
+    #         os.makedirs(str(i))
+    #     except OSError as e:
+    #         if e.errno != errno.EEXIST:
+    #             raise
     ima_dir = "./IMG"
     data_path = ima_dir + "/*.JPG"
     files = glob.glob(data_path)
@@ -34,17 +45,16 @@ def dataPatch():
     labels = []
     patches_name = 'patch_'
     file_extension = '.png'
+    number = 0
     for k in range(len(patches)):
-        number = 0
         patches[k] = np.array(patches[k])
         # arr = patches[k].reshape(50,50)
         # im = Image.fromarray(arr.astype('uint8'),'L')
         print(type(patches[k]))
         if patches[k].shape[0] != 0 and patches[k].shape[1] != 0:
             im = Image.fromarray(patches[k], 'L')
-            direc = '/'
-            im.save(patches_name + str(number) + file_extension)
-            im = cv2.imread(patches_name + str(number) + file_extension)
+            im.save('myim.png')
+            im = cv2.imread('myim.png')
             kp, des = sift_cv2.detectAndCompute(im, None)
             # im = im.astype('float32')
             patches_img.append(cv2.resize(im, dsize=(16, 16), interpolation=cv2.INTER_AREA))
@@ -78,5 +88,13 @@ def dataPatch():
             if cnt[k] > 0:
                 cnt_file[k] = cnt[k]
             labels.append(cnt_file[k])
+            dir_name = './'+str(cnt_file[k])+'/'
+            im = Image.fromarray(patches[k], 'L')
+            #im.save(dir_name + patches_name + str(number) + file_extension)
+
+            data_set[number+1].append(dir_name + patches_name + str(number) + file_extension)
+            data_set[number+1].append(cnt_file[k])
+            number += 1
             print(cnt_file[k])
             print("time :", time.time() - start)
+    return data_set

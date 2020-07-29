@@ -19,61 +19,53 @@ import torch
 from torch.autograd import Variable
 from torch.nn import Linear, ReLU, CrossEntropyLoss, Sequential, Conv2d, MaxPool2d, Module, Softmax, BatchNorm2d, Dropout
 from torch.optim import Adam, SGD
+import cv2
+# from datafunction import dataPatch
+# data_set = dataPatch()
+#
+# import pandas as pd
+# dataframe = pd.DataFrame(data_set)
+# dataframe.to_csv("./patchfile.csv",header=False, index=False)
 
-from datafunction import dataPatch
-dataPatch()
+# loading dataset
+train = pd.read_csv('patchfile.csv')
+print(train.head())
 
 # loading training images
 train_img = []
-for img_name in tqdm(train['id']):
-    # defining the image path
-    image_path = 'train_LbELtWX/train/' + str(img_name) + '.png'
+for img_name in tqdm(train['Patch_num']):
     # reading the image
-    img = imread(image_path, as_gray=True)
-    # normalizing the pixel values
-    img /= 255.0
-    # converting the type of pixel to float 32
-    img = img.astype('float32')
+    img = cv2.imread(str(img_name))
     # appending the image into the list
     train_img.append(img)
 
 # converting the list to numpy array
 train_x = np.array(train_img)
 # defining the target
-train_y = train['label'].values
-train_x.shape
-
-# converting the list to numpy array
-train_x = np.array(patches_img)
-train_x = np.delete(train_x,1,3)
-train_x = np.delete(train_x,1,3)
-train_x = np.delete(train_x,1,3)
-train_x = train_x.reshape(239, 16, 16)
-# defining the target
-train_y = np.array(labels)
-
+train_y = train['Label'].values
+print(train_x.shape)
 # create validation set
 train_x, val_x, train_y, val_y = train_test_split(train_x, train_y, test_size = 0.2)
 print((train_x.shape, train_y.shape), (val_x.shape, val_y.shape))
 
 # converting training images into torch format
-train_x = train_x.reshape(191, 1, 28, 28)
+train_x = train_x.reshape(239, 1, 28, 28)
 train_x  = torch.from_numpy(train_x)
 
 
 # converting the target into torch format
-train_y = train_y.astype(int);
+train_y = train_y.astype(int)
 train_y = torch.from_numpy(train_y)
 
 # shape of training data
 train_x.shape, train_y.shape
 
 #converting validation images into torch format
-val_x = val_x.reshape(48, 1, 28, 28)
+val_x = val_x.reshape(60, 1, 28, 28)
 val_x  = torch.from_numpy(val_x)
 
 # converting the target into torch format
-val_y = val_y.astype(int);
+val_y = val_y.astype(int)
 val_y = torch.from_numpy(val_y)
 
 # shape of validation data
