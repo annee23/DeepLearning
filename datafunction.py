@@ -10,28 +10,24 @@ import time
 start = time.time()
 def dataPatch():
     data_set = []
-    # class DATA:
-    #     patch = []
-    #     label = 0
-    #     def __init__(self, p, ll):
-    #         patch = p
-    #         label = ll
-    for i in range(300):
+
+    for i in range(10000):
         data_set.append([])
     data_set[0].append('Patch_num')
     data_set[0].append('Label')
-    # for i in range(6):
-    #     try:
-    #         os.makedirs(str(i))
-    #     except OSError as e:
-    #         if e.errno != errno.EEXIST:
-    #             raise
+    #파일 만드는 부
+    for i in range(12):
+        try:
+            os.makedirs(str(i))
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
     ima_dir = "./IMG"
     data_path = ima_dir + "/*.JPG"
     files = glob.glob(data_path)
     data = []
-    comp = cv2.imread("DSC01873.JPG", 0)
-    comp = cv2.resize(comp, dsize=(256, 256), interpolation=cv2.INTER_AREA)
+    comp = cv2.imread("DSC01756.JPG", 0)
+    comp = cv2.resize(comp, dsize=(600, 400), interpolation=cv2.INTER_AREA)
     print(comp)
     kp, des, patches = sift.computeKeypointsAndDescriptors(comp)
     cnt_file = []
@@ -56,14 +52,11 @@ def dataPatch():
             im.save('myim.png')
             im = cv2.imread('myim.png')
             kp, des = sift_cv2.detectAndCompute(im, None)
-            # im = im.astype('float32')
             patches_img.append(cv2.resize(im, dsize=(16, 16), interpolation=cv2.INTER_AREA))
-            # p = []
-            # p.append(np.array(patches).resize((k,16,16)))
-            # print(p.__sizeof__())
+
             for fl in files:
                 img = cv2.imread(fl, 0)
-                img = cv2.resize(img, dsize=(256, 256), interpolation=cv2.INTER_AREA)
+                img = cv2.resize(img, dsize=(600, 400), interpolation=cv2.INTER_AREA)
                 kp1, des1 = sift_cv2.detectAndCompute(img, None)
                 # FLANN parameters
                 FLANN_INDEX_KDTREE = 0
@@ -90,8 +83,7 @@ def dataPatch():
             labels.append(cnt_file[k])
             dir_name = './'+str(cnt_file[k])+'/'
             im = Image.fromarray(patches[k], 'L')
-            #im.save(dir_name + patches_name + str(number) + file_extension)
-
+            im.save(dir_name + patches_name + str(number) + file_extension)
             data_set[number+1].append(dir_name + patches_name + str(number) + file_extension)
             data_set[number+1].append(cnt_file[k])
             number += 1

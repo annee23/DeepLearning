@@ -20,6 +20,8 @@ from torch.autograd import Variable
 from torch.nn import Linear, ReLU, CrossEntropyLoss, Sequential, Conv2d, MaxPool2d, Module, Softmax, BatchNorm2d, Dropout
 from torch.optim import Adam, SGD
 import cv2
+
+# #csv파일 만드는 부
 # from datafunction import dataPatch
 # data_set = dataPatch()
 #
@@ -60,7 +62,7 @@ print((train_x.shape, train_y.shape), (val_x.shape, val_y.shape))
 train_x = np.delete(train_x, 1, 3)
 train_x = np.delete(train_x, 1, 3)
 
-train_x = train_x.reshape(191, 1, 28, 28)
+train_x = train_x.reshape(np.array(train_x).shape[0], 1, 28, 28)
 train_x  = torch.from_numpy(train_x)
 
 
@@ -74,7 +76,7 @@ train_x.shape, train_y.shape
 #converting validation images into torch format
 val_x = np.delete(val_x, 1, 3)
 val_x = np.delete(val_x, 1, 3)
-val_x = val_x.reshape(48, 1, 28, 28)
+val_x = val_x.reshape(np.array(val_x).shape[0], 1, 28, 28)
 
 val_x  = torch.from_numpy(val_x)
 
@@ -102,7 +104,7 @@ class Net(Module):
         )
 
         self.linear_layers = Sequential(
-            Linear(4 * 7 * 7, 6)
+            Linear(4 * 7 * 7, 11)
         )
 
     # Defining the forward pass
@@ -163,7 +165,7 @@ def train(epoch):
         print('Epoch : ', epoch + 1, '\t', 'loss :', loss_val)
 
 # defining the number of epochs
-n_epochs = 25
+n_epochs = 50
 # empty list to store training losses
 train_losses = []
 # empty list to store validation losses
